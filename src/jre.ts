@@ -5,11 +5,11 @@
  * Licensed under the LGPLv3 License. See LICENSE.txt in the project root for license information.
  * ------------------------------------------------------------------------------------------ */
 
-
 import * as followRedirects from 'follow-redirects';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as inly from 'inly';
+import * as telemetry from './telemetry';
 
 const https = followRedirects.https;
 
@@ -75,7 +75,8 @@ export function download(options: Options, destinationDir: string): Promise<Down
       if (!fs.existsSync(destinationDir)) {
         fs.mkdirSync(destinationDir);
       }
-    } catch(err) {
+    } catch (err) {
+      telemetry.logError(err);
       reject(err);
     }
 
@@ -83,17 +84,20 @@ export function download(options: Options, destinationDir: string): Promise<Down
     const extension = options.os === 'windows' ? 'zip' : 'tgz';
     const jreZipPath = path.join(destinationDir, `jre.${extension}`);
 
-    https.get(fileToDownload, res => {
-      const fileToSave = fs.createWriteStream(jreZipPath);
-      res.pipe(fileToSave);
-      fileToSave.on('finish', () => {
-        fileToSave.close();
-        resolve({ destinationDir, jreZipPath, options });
+    https
+      .get(fileToDownload, res => {
+        const fileToSave = fs.createWriteStream(jreZipPath);
+        res.pipe(fileToSave);
+        fileToSave.on('finish', () => {
+          fileToSave.close();
+          resolve({ destinationDir, jreZipPath, options });
+        });
+      })
+      .on('error', err => {
+        telemetry.logError(err);
+        fs.unlinkSync(jreZipPath);
+        reject(err);
       });
-    }).on('error', err => {
-      fs.unlinkSync(jreZipPath);
-      reject(err);
-    });
   });
 }
 
@@ -105,17 +109,16 @@ export function unzip(downloadResponse: DownloadResponse) {
   return new Promise((resolve, reject) => {
     const extract = inly(downloadResponse.jreZipPath, jreDir);
     extract.on('error', err => {
+      telemetry.logError(err);
       reject(err);
     });
     extract.on('end', () => {
       fs.unlinkSync(downloadResponse.jreZipPath);
       // Archive for MacOS contains a file named '._xxx' which interferes with detection of extracted directory
-      const extractedDir = fs.readdirSync(jreDir, { withFileTypes: true })
-        .filter(d => d.isDirectory())[0].name;
+      const extractedDir = fs.readdirSync(jreDir, { withFileTypes: true }).filter(d => d.isDirectory())[0].name;
       // Binary for MacOS has actual Java home inside '<archiveRootDir>/Contents/Home'
-      const actualJavaHome = downloadResponse.options.os === 'mac' ?
-        path.join(extractedDir, 'Contents', 'Home') :
-        extractedDir;
+      const actualJavaHome =
+        downloadResponse.options.os === 'mac' ? path.join(extractedDir, 'Contents', 'Home') : extractedDir;
       resolve(path.join(jreDir, actualJavaHome));
     });
   });

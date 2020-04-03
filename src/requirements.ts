@@ -19,6 +19,7 @@ import { Commands } from './commands';
 import * as jre from './jre';
 import { PlatformInformation } from './platform';
 import * as util from './util';
+import * as telemetry from './telemetry';
 
 const isWindows = process.platform.indexOf('win') === 0;
 const JAVA_FILENAME = `java${isWindows ? '.exe' : ''}`;
@@ -39,6 +40,7 @@ interface ErrorData {
 export async function resolveRequirements(context: vscode.ExtensionContext): Promise<RequirementsData> {
   const javaHome = await checkJavaRuntime(context);
   const javaVersion = await checkJavaVersion(javaHome);
+  telemetry.logEvent(telemetry.Event.JreResolved, { version: String(javaVersion) }, {});
   return { javaHome, javaVersion };
 }
 
@@ -165,28 +167,37 @@ function invalidJavaHome(reject, cause: string) {
 }
 
 export function installManagedJre() {
+  const installStart = Date.now();
   return vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: 'SonarLint JRE Install' },
     (progress, cancelToken) => {
-      return PlatformInformation.GetPlatformInformation().then(platformInfo => {
-        const options = {
-          os: platformInfo.os as jre.Os,
-          architecture: platformInfo.arch as jre.Architecture,
-          version: 11 as jre.Version
-        };
-        progress.report({ message: 'Downloading' });
-        return jre.download(options, path.join(util.extensionPath, '..', 'sonarsource.sonarlint_managed-jre'));
-      })
+      return PlatformInformation.GetPlatformInformation()
+        .then(platformInfo => {
+          const options = {
+            os: platformInfo.os as jre.Os,
+            architecture: platformInfo.arch as jre.Architecture,
+            version: 11 as jre.Version
+          };
+          progress.report({ message: 'Downloading' });
+          return jre.download(options, path.join(util.extensionPath, '..', 'sonarsource.sonarlint_managed-jre'));
+        })
         .then(downloadResponse => {
           progress.report({ message: 'Uncompressing' });
           return jre.unzip(downloadResponse);
         })
         .then(jreInstallDir => {
           progress.report({ message: 'Done' });
-          vscode.workspace.getConfiguration('sonarlint.ls')
+          vscode.workspace
+            .getConfiguration('sonarlint.ls')
             .update('javaHome', jreInstallDir, vscode.ConfigurationTarget.Global);
+          telemetry.logEvent(
+            telemetry.Event.InstallManagedJre,
+            {},
+            { [telemetry.durationKey(telemetry.Event.InstallManagedJre)]: Date.now() - installStart }
+          );
         })
         .catch(err => {
+          telemetry.logError(err);
           throw err;
         });
     }

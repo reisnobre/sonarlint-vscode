@@ -16,8 +16,10 @@ import { SonarLintExtendedLanguageClient } from './client';
 let classpathChangeListener: Disposable;
 let javaApiTooLowAlreadyLogged = false;
 
+export const VSCODE_JAVA_EXTENSION_ID = 'redhat.java';
+
 export function installClasspathListener(languageClient: SonarLintExtendedLanguageClient) {
-  const extension: VSCode.Extension<any> | undefined = VSCode.extensions.getExtension('redhat.java');
+  const extension: VSCode.Extension<any> | undefined = VSCode.extensions.getExtension(VSCODE_JAVA_EXTENSION_ID);
   if (extension?.isActive) {
     if (!classpathChangeListener) {
       const extensionApi: any = extension.exports;
@@ -51,7 +53,7 @@ export async function getJavaConfig(
   languageClient: SonarLintExtendedLanguageClient,
   fileUri: string
 ): Promise<GetJavaConfigResponse> {
-  const extension: VSCode.Extension<any> | undefined = VSCode.extensions.getExtension('redhat.java');
+  const extension: VSCode.Extension<any> | undefined = VSCode.extensions.getExtension(VSCODE_JAVA_EXTENSION_ID);
   try {
     const extensionApi: any = await extension?.activate();
     if (extensionApi && isJavaApiRecentEnough(extensionApi.apiVersion)) {

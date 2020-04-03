@@ -13,6 +13,7 @@ import * as ChildProcess from 'child_process';
 import { LanguageClientOptions, StreamInfo } from 'vscode-languageclient';
 
 import * as util from './util';
+import * as telemetry from './telemetry';
 import { AllRulesTreeDataProvider, Rule, RuleNode, ConfigLevel } from './rules';
 import { Commands } from './commands';
 import { SonarLintExtendedLanguageClient } from './client';
@@ -24,6 +25,8 @@ import { installClasspathListener, getJavaConfig } from './java';
 declare let v8debug: object;
 const DEBUG = typeof v8debug === 'object' || util.startedInDebugMode(process);
 let currentConfig: VSCode.WorkspaceConfiguration;
+
+let serverStart;
 
 const DOCUMENT_SELECTOR = [
   { scheme: 'file', language: 'java' },
@@ -53,6 +56,7 @@ export function logToSonarLintOutput(message) {
 function runJavaServer(context: VSCode.ExtensionContext): Thenable<StreamInfo> {
   return resolveRequirements(context)
     .catch(error => {
+      telemetry.logError(error);
       //show error
       VSCode.window.showErrorMessage(error.message, error.label).then(selection => {
         if (error.label && error.label === selection && error.command) {
@@ -64,6 +68,7 @@ function runJavaServer(context: VSCode.ExtensionContext): Thenable<StreamInfo> {
     })
     .then(requirements => {
       return new Promise<StreamInfo>((resolve, reject) => {
+        serverStart = Date.now();
         const server = Net.createServer(socket => {
           if (isVerboseEnabled()) {
             logToSonarLintOutput(`Child process connected on port ${(server.address() as Net.AddressInfo).port}`);
@@ -209,6 +214,8 @@ function toggleRule(level: ConfigLevel) {
 }
 
 export function activate(context: VSCode.ExtensionContext) {
+  telemetry.activate(context);
+
   currentConfig = getSonarLintConfiguration();
 
   util.setExtensionContext(context);
@@ -311,8 +318,14 @@ export function activate(context: VSCode.ExtensionContext) {
 }
 
 function installCustomRequestHandlers(context: VSCode.ExtensionContext) {
-  languageClient.onRequest(ShowRuleDescriptionRequest.type, params => {
-    const ruleDescPanelContent = computeRuleDescPanelContent(context, params);
+  context.subscriptions.push(
+    languageClient.onTelemetry(e => {
+      telemetry.logServerEvent(e);
+    })
+  );
+  languageClient.onRequest(ShowRuleDescriptionRequest.type, rule => {
+    telemetry.logEvent(telemetry.Event.ShowRuleDescription, { ruleKey: rule.key });
+    const ruleDescPanelContent = computeRuleDescPanelContent(context, rule);
     if (!ruleDescriptionPanel) {
       ruleDescriptionPanel = VSCode.window.createWebviewPanel(
         'sonarlint.RuleDesc',
@@ -334,6 +347,12 @@ function installCustomRequestHandlers(context: VSCode.ExtensionContext) {
     ruleDescriptionPanel.reveal();
   });
   languageClient.onRequest(GetJavaConfigRequest.type, fileUri => getJavaConfig(languageClient, fileUri));
+  const serverStartDuration = Date.now() - serverStart;
+  telemetry.logEvent(
+    telemetry.Event.LsStarted,
+    {},
+    { [telemetry.durationKey(telemetry.Event.LsStarted)]: serverStartDuration }
+  );
 }
 
 function onConfigurationChange() {
@@ -367,12 +386,6 @@ function configKeyEquals(key, oldConfig, newConfig) {
   return oldConfig.get(key) === newConfig.get(key);
 }
 
-function configKeyDeepEquals(key, oldConfig, newConfig) {
-  // note: lazy implementation; see for something better: https://stackoverflow.com/a/10316616/641955
-  // note: may not work well for objects (non-deterministic order of keys)
-  return JSON.stringify(oldConfig.get(key)) === JSON.stringify(newConfig.get(key));
-}
-
 export function parseVMargs(params: string[], vmargsLine: string) {
   if (!vmargsLine) {
     return;
@@ -402,5 +415,13 @@ export function deactivate(): Thenable<void> {
   if (!languageClient) {
     return undefined;
   }
-  return languageClient.stop();
+  const serverStop = Date.now();
+  return languageClient.stop().then(() => {
+    const serverStopDuration = Date.now() - serverStop;
+    telemetry.logEvent(
+      telemetry.Event.LsStopped,
+      {},
+      { [telemetry.durationKey(telemetry.Event.LsStopped)]: serverStopDuration }
+    );
+  });
 }

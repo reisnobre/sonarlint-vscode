@@ -425,13 +425,14 @@
     "prepare": "node scripts/prepare.js"
   },
   "dependencies": {
+    "compare-versions": "3.6.0",
     "expand-home-dir": "0.0.3",
     "find-java-home": "1.1.0",
     "follow-redirects": "1.10.0",
     "inly": "4.0.4",
     "open": "6.0.0",
     "path-exists": "3.0.0",
-    "compare-versions": "3.6.0",
+    "applicationinsights": "1.7.3",
     "vscode-languageclient": "5.2.1"
   },
   "devDependencies": {
