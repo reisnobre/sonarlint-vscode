@@ -323,7 +323,7 @@ function installCustomRequestHandlers(context: VSCode.ExtensionContext) {
         'SonarLint Rule Description',
         VSCode.ViewColumn.Two,
         {
-          enableScripts: false
+          enableScripts: true
         }
       );
       ruleDescriptionPanel.onDidDispose(
@@ -335,6 +335,23 @@ function installCustomRequestHandlers(context: VSCode.ExtensionContext) {
       );
     }
     ruleDescriptionPanel.webview.html = ruleDescPanelContent;
+    ruleDescriptionPanel.webview.onDidReceiveMessage(
+      message => {
+        const { command, ruleKey, parameter, value } = message;
+        if (command === 'setParameterValue') {
+          const configuration = getSonarLintConfiguration();
+          const rules = configuration.get('rules') || {};
+          const rule = rules[ruleKey] || { level: 'on' };
+          const params = rule.parameters || {};
+          params[parameter] = value;
+          rule.parameters = params;
+          rules[ruleKey] = rule;
+          configuration.update('rules', rules, VSCode.ConfigurationTarget.Global);
+        }
+      },
+      undefined,
+      context.subscriptions
+    );
     ruleDescriptionPanel.reveal();
   });
   languageClient.onRequest(GetJavaConfigRequest.type, fileUri => getJavaConfig(languageClient, fileUri));

@@ -24,7 +24,8 @@ export function computeRuleDescPanelContent(context: VSCode.ExtensionContext, ru
 		<head>
 		<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
 		<meta http-equiv="Encoding" content="utf-8" />
-		<meta http-equiv="Content-Security-Policy" value="default-src 'none'"/>
+		<meta http-equiv="Content-Security-Policy"
+			content="default-src 'self'; img-src data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"/>
 		<style type="text/css">
 			body { 
 				font-family: Helvetica Neue,Segoe UI,Helvetica,Arial,sans-serif; 
@@ -106,7 +107,25 @@ function renderRuleParams(rule: ShowRuleDescriptionParams) {
   <tbody>
     ${rule.parameters.map(p => renderRuleParam(p, ruleParamsConfig)).join('\n')}
   </tbody>
-</table>`;
+</table>
+<script type="text/javascript">
+(function() {
+  const vscode = acquireVsCodeApi();
+  window.onload = () => {
+    document.querySelectorAll('input[type=text]').forEach(el => {
+      el.addEventListener('change', ev => {
+        vscode.postMessage({
+          command: 'setParameterValue',
+          ruleKey: '${rule.key}',
+          parameter: el.id,
+          value: el.value
+        });
+        return true;
+      });
+    });
+  };
+}());
+</script>`;
   } else {
     return '';
   }
@@ -114,14 +133,11 @@ function renderRuleParams(rule: ShowRuleDescriptionParams) {
 
 function renderRuleParam(param, config) {
   const { name, description, defaultValue } = param;
-  const descriptionP = description ? `<p>${description}</p>` : '';
-  const currentValue = config.has(name) ? `<small>Current value: <code>${config.get(name)}</code></small>` : '';
+  const currentValue = config.has(name) ? config.get(name) : defaultValue;
   return `<tr>
   <th>${name}</th>
   <td>
-    ${descriptionP}
-    ${currentValue}
-    <small>(Default value: <code>${defaultValue}</code>)</small>
+    <input type="text" id="${name}" value="${currentValue}" ${description ? 'title="' + description + '"' : ''} />
   </td>
 </tr>`;
 }
