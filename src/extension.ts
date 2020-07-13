@@ -96,7 +96,7 @@ function runJavaServer(context: VSCode.ExtensionContext): Thenable<StreamInfo> {
 
 function logWithPrefix(data, prefix) {
   if (isVerboseEnabled()) {
-    var lines = data.toString().split(/\r\n|\r|\n/);
+    const lines = data.toString().split(/\r\n|\r|\n/);
     lines.forEach(l => {
       if (l.length > 0) {
         logToSonarLintOutput(`${prefix} ${l}`);
@@ -115,7 +115,7 @@ function languageServerCommand(
   port: number
 ): { command: string; args: string[] } {
   const serverJar = Path.resolve(context.extensionPath, 'server', 'sonarlint-ls.jar');
-  const javaExecutablePath = Path.resolve(requirements.javaHome + '/bin/java');
+  const javaExecutablePath = Path.resolve(`${requirements.javaHome}/bin/java`);
 
   const params = [];
   if (DEBUG) {
@@ -124,7 +124,7 @@ function languageServerCommand(
   }
   const vmargs = getSonarLintConfiguration().get('ls.vmargs', '');
   parseVMargs(params, vmargs);
-  params.push('-jar', serverJar, '' + port);
+  params.push('-jar', serverJar, `${port}`);
   params.push(toUrl(Path.resolve(context.extensionPath, 'analyzers', 'sonarjava.jar')));
   params.push(toUrl(Path.resolve(context.extensionPath, 'analyzers', 'sonarjs.jar')));
   params.push(toUrl(Path.resolve(context.extensionPath, 'analyzers', 'sonarphp.jar')));
@@ -138,10 +138,10 @@ export function toUrl(filePath: string) {
 
   // Windows drive letter must be prefixed with a slash
   if (pathName[0] !== '/') {
-    pathName = '/' + pathName;
+    pathName = `/${pathName}`;
   }
 
-  return encodeURI('file://' + pathName);
+  return encodeURI(`file://${pathName}`);
 }
 
 function resolveInAnyWorkspaceFolder(tsdkPathSetting) {
@@ -316,7 +316,6 @@ export function activate(context: VSCode.ExtensionContext) {
 
 function installCustomRequestHandlers(context: VSCode.ExtensionContext) {
   languageClient.onRequest(ShowRuleDescriptionRequest.type, params => {
-    const ruleDescPanelContent = computeRuleDescPanelContent(context, params);
     if (!ruleDescriptionPanel) {
       ruleDescriptionPanel = VSCode.window.createWebviewPanel(
         'sonarlint.RuleDesc',
@@ -334,6 +333,7 @@ function installCustomRequestHandlers(context: VSCode.ExtensionContext) {
         context.subscriptions
       );
     }
+    const ruleDescPanelContent = computeRuleDescPanelContent(context, ruleDescriptionPanel.webview, params);
     ruleDescriptionPanel.webview.html = ruleDescPanelContent;
     ruleDescriptionPanel.reveal();
   });
