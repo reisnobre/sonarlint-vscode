@@ -437,7 +437,8 @@
     "open": "6.0.0",
     "path-exists": "3.0.0",
     "compare-versions": "3.6.0",
-    "vscode-languageclient": "5.2.1"
+    "vscode-languageclient": "5.2.1",
+    "express": "4.17.1"
   },
   "devDependencies": {
     "@types/chai": "^4.2.10",

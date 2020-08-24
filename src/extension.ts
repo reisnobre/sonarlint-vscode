@@ -21,6 +21,8 @@ import { computeRuleDescPanelContent } from './rulepanel';
 import { ShowRuleDescriptionRequest, GetJavaConfigRequest } from './protocol';
 import { installClasspathListener, getJavaConfig } from './java';
 import { code2ProtocolConverter, protocol2CodeConverter } from './uri';
+import { TextDocumentShowOptions, Uri, ViewColumn } from 'vscode';
+
 
 declare let v8debug: object;
 const DEBUG = typeof v8debug === 'object' || util.startedInDebugMode(process);
@@ -45,6 +47,8 @@ const DOCUMENT_SELECTOR = [
 let sonarlintOutput: VSCode.OutputChannel;
 let ruleDescriptionPanel: VSCode.WebviewPanel;
 let languageClient: SonarLintExtendedLanguageClient;
+const express = require('express');
+const expressApp = express();
 
 export function logToSonarLintOutput(message) {
   if (sonarlintOutput) {
@@ -208,10 +212,44 @@ function toggleRule(level: ConfigLevel) {
     return configuration.update('rules', rules, VSCode.ConfigurationTarget.Global);
   };
 }
+expressApp.get('/', function (req, res) {
+  console.log(req);
+  const { projectName, fileName, lineNumber } = req.query;
+  const folders = VSCode.workspace.workspaceFolders;
+  const projectFolder = folders.find((it) =>
+    it.name == projectName
+  );
+  const filePath = Uri.parse(`${projectFolder.uri}/${fileName}`);
+  VSCode.workspace.openTextDocument(filePath)
+    .then((document) => {
+      const line = document.lineAt(lineNumber - 1);
+      const options: TextDocumentShowOptions = {
+        viewColumn: ViewColumn.Active,
+        selection: line.range
+      };
+      return VSCode.window.showTextDocument(document, options);
+    })
+    .then((result) => {
+        res.send('OK');
+    },
+      (e) => {
+        res.send('Not OK');
+      });
+
+  //VSCode.window.showTextDocument()
+
+})
+
+const server = expressApp.listen(63333, function () {
+  const host = "localhost";
+  const port = server.address().port;
+
+  console.log("Example app listening at http://%s:%s", host, port);
+});
+
 
 export function activate(context: VSCode.ExtensionContext) {
   currentConfig = getSonarLintConfiguration();
-
   util.setExtensionContext(context);
   sonarlintOutput = VSCode.window.createOutputChannel('SonarLint');
   context.subscriptions.push(sonarlintOutput);
