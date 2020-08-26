@@ -51,7 +51,7 @@ const express = require('express');
 const cors = require('cors');
 const expressApp = express();
 
-let whitelist = ['http://localhost:9000']
+let whitelist = ['http://localhost:9000', 'http://135.181.88.65:9000']
 
 expressApp.use(cors({
   origin: function (origin, callback) {
